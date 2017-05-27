@@ -476,6 +476,7 @@ function! s:uglify_ternary(node) abort dict
                     \.concat([self.uglify_node(a:node.cond),
                     \   '?',
                     \   self.uglify_node(a:node.left),
+                    \   ':',
                     \   self.uglify_node(a:node.right)])
 endfunction
 let s:UGLIFY_FUNC[s:vimlparser.NODE_TERNARY] = function('s:uglify_ternary')
