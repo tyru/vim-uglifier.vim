@@ -195,12 +195,26 @@ function! s:uglify_comment(node) abort dict
 endfunction
 let s:UGLIFY_FUNC[s:vimlparser.NODE_COMMENT] = function('s:uglify_comment')
 
-" TODO: Uglify a:node.str too?
 function! s:uglify_excmd(node) abort dict
   return s:UglifyNode.new(a:node)
-            \.add(a:node.str)
+            \.add(s:EX_BEGIN_NEWLINE)
+            \.add(s:lookup_min_cmd(a:node.str))
 endfunction
 let s:UGLIFY_FUNC[s:vimlparser.NODE_EXCMD] = function('s:uglify_excmd')
+
+function! s:lookup_min_cmd(cmd) abort
+  for cmd in s:vimlparser.VimLParser.builtin_commands
+    if cmd.name[cmd.minlen :] ==# ''
+      let re = '^' . cmd.name
+    else
+      let re = '^' . cmd.name[: cmd.minlen - 1] . '\%[' . cmd.name[cmd.minlen :] . ']'
+    endif
+    if a:cmd =~# re
+      return substitute(a:cmd, re, cmd.name[: cmd.minlen - 1], '')
+    endif
+  endfor
+  return a:cmd
+endfunction
 
 " :function[!] {name}([arguments]) [range] [abort] [dict] [closure]
 function! s:uglify_function(node) abort dict

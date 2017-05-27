@@ -1,4 +1,8 @@
 fu s:foo(a,b,...)
+a
+  foo
+  bar
+.
 ec'foo'
 retu 0
 endf

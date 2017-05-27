@@ -1,5 +1,9 @@
 " test1
 function s:foo(a, b, ...)
+  append
+  foo
+  bar
+.
   echo 'foo'
   return 0
 endfunction
