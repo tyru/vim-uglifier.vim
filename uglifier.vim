@@ -3,7 +3,7 @@
 "
 " 1. Open this script file (:e uglifier.vim)
 " 2. so %
-" 3. Uglified version of test-script.vim (uglified-test-script.vim) is echoed
+" 3. Uglified version of uglifier.vim (uglified-uglifier.vim) is echoed
 
 let s:vimlparser = vimlparser#import()
 
@@ -12,7 +12,8 @@ let s:T_DICT = type({})
 let s:T_LIST = type([])
 
 function! s:run() abort
-  let src = readfile('test-script.vim')
+  " let src = readfile('test-script.vim')
+  let src = readfile('uglifier.vim')
 
   let r = s:vimlparser.StringReader.new(src)
   let neovim = 0
@@ -117,11 +118,9 @@ function! s:Uglifier.do_compile(parts) abort
     if s:is_terminal_node(a:parts[i])
       let source += [a:parts[i]]
     else
-      let prev_str = get(source, -1, '')
       let prev_part = i > 0 ? a:parts[i - 1] : s:vimlparser.NIL
       let next_part = i + 1 < len(a:parts) ? a:parts[i + 1] : s:vimlparser.NIL
       let ctx = {
-      \ 'prev_str': prev_str,
       \ 'prev_part': prev_part,
       \ 'next_part': next_part
       \}
@@ -151,16 +150,16 @@ function! s:place_between(list, sep) abort
   return result
 endfunction
 
-function! s:word_boundary_newline(ctx) abort
-  if a:ctx.prev_part is s:vimlparser.NIL
-    return ''
-  elseif a:ctx.prev_str[len(a:ctx.prev_str) - 1] =~# '\w'
-    return "\n"
-  else
+function! s:word_boundary_space(ctx) abort
+  if s:is_terminal_node(a:ctx.prev_part) &&
+  \  s:is_terminal_node(a:ctx.next_part) &&
+  \  (a:ctx.prev_part[len(a:ctx.prev_part) - 1] !~# '\w' ||
+  \   a:ctx.next_part[0] !~# '\w')
     return ''
   endif
+  return ' '
 endfunction
-let s:WORD_BOUNDARY_NEWLINE = {'get': function('s:word_boundary_newline')}
+let s:WORD_BOUNDARY_SPACE = {'get': function('s:word_boundary_space')}
 
 function! s:ex_begin_newline(ctx) abort
   if a:ctx.prev_part is s:vimlparser.NIL
@@ -692,9 +691,9 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_NOMATCHCS] = function('s:uglify_nomatchcs')
 function! s:uglify_is(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(self.uglify_node(a:node.left))
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add('is')
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add(self.uglify_node(a:node.right))
 endfunction
 let s:UGLIFY_FUNC[s:vimlparser.NODE_IS] = function('s:uglify_is')
@@ -702,7 +701,7 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_IS] = function('s:uglify_is')
 function! s:uglify_isci(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(self.uglify_node(a:node.left))
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add('is?')
                     \.add(self.uglify_node(a:node.right))
 endfunction
@@ -711,7 +710,7 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_ISCI] = function('s:uglify_isci')
 function! s:uglify_iscs(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(self.uglify_node(a:node.left))
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add('is#')
                     \.add(self.uglify_node(a:node.right))
 endfunction
@@ -720,9 +719,9 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_ISCS] = function('s:uglify_iscs')
 function! s:uglify_isnot(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(self.uglify_node(a:node.left))
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add('isnot')
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add(self.uglify_node(a:node.right))
 endfunction
 let s:UGLIFY_FUNC[s:vimlparser.NODE_ISNOT] = function('s:uglify_isnot')
@@ -730,7 +729,7 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_ISNOT] = function('s:uglify_isnot')
 function! s:uglify_isnotci(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(self.uglify_node(a:node.left))
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add('isnot?')
                     \.add(self.uglify_node(a:node.right))
 endfunction
@@ -739,7 +738,7 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_ISNOTCI] = function('s:uglify_isnotci')
 function! s:uglify_isnotcs(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(self.uglify_node(a:node.left))
-                    \.add(s:WORD_BOUNDARY_NEWLINE)
+                    \.add(s:WORD_BOUNDARY_SPACE)
                     \.add('isnot#')
                     \.add(self.uglify_node(a:node.right))
 endfunction
@@ -764,7 +763,7 @@ let s:UGLIFY_FUNC[s:vimlparser.NODE_SUBTRACT] = function('s:uglify_subtract')
 " XXX: NODE_DOT(property access or string concatenation) and
 " NODE_CONCAT(string concatenation) are different. is it safe to mix?
 function! s:uglify_concat(node) abort dict
-  return s:uglify_dot(a:node)
+  return call('s:uglify_dot', [a:node], self)
 endfunction
 let s:UGLIFY_FUNC[s:vimlparser.NODE_CONCAT] = function('s:uglify_concat')
 
