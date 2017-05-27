@@ -152,7 +152,7 @@ function! s:place_between(list, sep) abort
 endfunction
 
 function! s:word_boundary_newline(ctx) abort
-  if a:prev_part is s:vimlparser.NIL
+  if a:ctx.prev_part is s:vimlparser.NIL
     return ''
   elseif a:ctx.prev_str[len(a:ctx.prev_str) - 1] =~# '\w'
     return "\n"
