@@ -1,9 +1,18 @@
 
-" REQUIREMENT: Add vim-vimlparser to 'runtimepath'
+" REQUIREMENT:
+" Add vim-vimlparser to 'runtimepath'
 "
+" RUN:
 " 1. Open this script file (:e uglifier.vim)
 " 2. so %
 " 3. Uglified version of uglifier.vim (uglified-uglifier.vim) is echoed
+"
+" TODO:
+" * Rename local / argument variables to 1-character variable if curly brace /
+"   eval() / execute are not used
+" * Parse :execute arguments
+" * Binary search builtin_commands
+
 
 let s:vimlparser = vimlparser#import()
 
