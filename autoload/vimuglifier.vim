@@ -1,35 +1,12 @@
 
-" REQUIREMENT:
-" Add vim-vimlparser to 'runtimepath'
-"
-" RUN:
-" 1. Open this script file (:e uglifier.vim)
-" 2. so %
-" 3. Uglified version of uglifier.vim (uglified-uglifier.vim) is echoed
-"
-" TODO:
-" * Rename local / argument variables to 1-character variable if curly brace /
-"   eval() / execute are not used
-" * Parse :execute arguments
-" * Binary search builtin_commands
-
-
-let s:vimlparser = vimlparser#import()
+let s:VP = vimlparser#import()
 
 let s:T_STRING = type("")
 let s:T_DICT = type({})
 let s:T_LIST = type([])
 
-function! s:run() abort
-  " let src = readfile('test-script.vim')
-  let src = readfile('uglifier.vim')
-
-  let r = s:vimlparser.StringReader.new(src)
-  let neovim = 0
-  let parser = s:vimlparser.VimLParser.new(neovim)
-
-  let uglifier = s:Uglifier.new()
-  echo uglifier.uglify(parser.parse(r))
+function! vimuglifier#new() abort
+  return deepcopy(s:Uglifier)
 endfunction
 
 
@@ -127,8 +104,8 @@ function! s:Uglifier.do_compile(parts) abort
     if s:is_terminal_node(a:parts[i])
       let source += [a:parts[i]]
     else
-      let prev_part = i > 0 ? a:parts[i - 1] : s:vimlparser.NIL
-      let next_part = i + 1 < len(a:parts) ? a:parts[i + 1] : s:vimlparser.NIL
+      let prev_part = i > 0 ? a:parts[i - 1] : s:VP.NIL
+      let next_part = i + 1 < len(a:parts) ? a:parts[i + 1] : s:VP.NIL
       let ctx = {
       \ 'prev_part': prev_part,
       \ 'next_part': next_part
@@ -171,7 +148,7 @@ endfunction
 let s:WORD_BOUNDARY_SPACE = {'get': function('s:word_boundary_space')}
 
 function! s:ex_begin_newline(ctx) abort
-  if a:ctx.prev_part is s:vimlparser.NIL
+  if a:ctx.prev_part is s:VP.NIL
     return ''
   else
     return "\n"
@@ -196,22 +173,24 @@ function! s:uglify_toplevel(node) abort dict
   return s:UglifyNode.new(a:node)
             \.concat(self.uglify_nodes(a:node.body))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_TOPLEVEL] = function('s:uglify_toplevel')
+let s:UGLIFY_FUNC[s:VP.NODE_TOPLEVEL] = function('s:uglify_toplevel')
 
 function! s:uglify_comment(node) abort dict
   return s:UglifyNode.new(a:node)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_COMMENT] = function('s:uglify_comment')
+let s:UGLIFY_FUNC[s:VP.NODE_COMMENT] = function('s:uglify_comment')
 
+" TODO: Parse :execute arguments
 function! s:uglify_excmd(node) abort dict
   return s:UglifyNode.new(a:node)
             \.add(s:EX_BEGIN_NEWLINE)
             \.add(s:lookup_min_cmd(a:node.str))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_EXCMD] = function('s:uglify_excmd')
+let s:UGLIFY_FUNC[s:VP.NODE_EXCMD] = function('s:uglify_excmd')
 
+" TODO: Binary search 'builtin_commands'
 function! s:lookup_min_cmd(cmd) abort
-  for cmd in s:vimlparser.VimLParser.builtin_commands
+  for cmd in s:VP.VimLParser.builtin_commands
     if cmd.name[cmd.minlen :] ==# ''
       let re = '^' . cmd.name
     else
@@ -224,6 +203,9 @@ function! s:lookup_min_cmd(cmd) abort
   return a:cmd
 endfunction
 
+" TODO: Rename local / argument variables to 1-character variable if curly brace
+" / eval() / execute are not used
+"
 " :function[!] {name}([arguments]) [range] [abort] [dict] [closure]
 function! s:uglify_function(node) abort dict
   let unode = s:UglifyNode.new(a:node)
@@ -246,7 +228,7 @@ function! s:uglify_function(node) abort dict
   let unode = unode.add("\nendf")
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_FUNCTION] = function('s:uglify_function')
+let s:UGLIFY_FUNC[s:VP.NODE_FUNCTION] = function('s:uglify_function')
 
 function! s:uglify_delfunction(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -255,12 +237,12 @@ function! s:uglify_delfunction(node) abort dict
             \.add(s:EX_ARG_SPACE)
             \.add(self.uglify_node(a:node.left))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_DELFUNCTION] = function('s:uglify_delfunction')
+let s:UGLIFY_FUNC[s:VP.NODE_DELFUNCTION] = function('s:uglify_delfunction')
 
 function! s:uglify_return(node) abort dict
   let unode = s:UglifyNode.new(a:node)
                          \.add(s:EX_BEGIN_NEWLINE)
-  if a:node.left is s:vimlparser.NIL
+  if a:node.left is s:VP.NIL
     return unode.add('retu')
   else
     return unode.add('retu')
@@ -268,7 +250,7 @@ function! s:uglify_return(node) abort dict
                \.add(self.uglify_node(a:node.left))
   endif
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_RETURN] = function('s:uglify_return')
+let s:UGLIFY_FUNC[s:VP.NODE_RETURN] = function('s:uglify_return')
 
 function! s:uglify_excall(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -277,19 +259,19 @@ function! s:uglify_excall(node) abort dict
             \.add(s:EX_ARG_SPACE)
             \.add(self.uglify_node(a:node.left))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_EXCALL] = function('s:uglify_excall')
+let s:UGLIFY_FUNC[s:VP.NODE_EXCALL] = function('s:uglify_excall')
 
 function! s:uglify_let(node) abort dict
   let unode = s:UglifyNode.new(a:node)
                          \.add(s:EX_BEGIN_NEWLINE)
-  if a:node.left isnot s:vimlparser.NIL
+  if a:node.left isnot s:VP.NIL
     let unode = unode.add('let')
     let unode = unode.add(s:EX_ARG_SPACE)
     let unode = unode.add(self.uglify_node(a:node.left))
   else
     let unode = unode.add('let[')
     let unode = unode.concat(s:place_between(self.uglify_nodes(a:node.list), ','))
-    if a:node.rest isnot s:vimlparser.NIL
+    if a:node.rest isnot s:VP.NIL
       let unode = unode.concat([';', self.uglify_node(a:node.rest)])
     endif
     let unode = unode.add(']')
@@ -297,7 +279,7 @@ function! s:uglify_let(node) abort dict
   let unode = unode.concat([a:node.op, self.uglify_node(a:node.right)])
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_LET] = function('s:uglify_let')
+let s:UGLIFY_FUNC[s:VP.NODE_LET] = function('s:uglify_let')
 
 function! s:uglify_unlet(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -306,12 +288,12 @@ function! s:uglify_unlet(node) abort dict
                     \.concat(
                     \   s:place_between(self.uglify_nodes(a:node.list), ' '))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_UNLET] = function('s:uglify_unlet')
+let s:UGLIFY_FUNC[s:VP.NODE_UNLET] = function('s:uglify_unlet')
 
 function! s:uglify_lockvar(node) abort dict
   let unode = s:UglifyNode.new(a:node)
                          \.add(s:EX_BEGIN_NEWLINE)
-  if a:node.depth is s:vimlparser.NIL
+  if a:node.depth is s:VP.NIL
     let unode = unode.concat(a:node.ea.forceit ? ['lockv!'] : ['lockv', s:EX_ARG_SPACE])
   else
     " NOTE: bang and depth cannot be used together (e.g. 'lockvar! 1').
@@ -323,12 +305,12 @@ function! s:uglify_lockvar(node) abort dict
   \             s:place_between(self.uglify_nodes(a:node.list), ' '))
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_LOCKVAR] = function('s:uglify_lockvar')
+let s:UGLIFY_FUNC[s:VP.NODE_LOCKVAR] = function('s:uglify_lockvar')
 
 function! s:uglify_unlockvar(node) abort dict
   let unode = s:UglifyNode.new(a:node)
                          \.add(s:EX_BEGIN_NEWLINE)
-  if a:node.depth is s:vimlparser.NIL
+  if a:node.depth is s:VP.NIL
     let unode = unode.concat(a:node.ea.forceit ? ['unlo!'] : ['unlo', s:EX_ARG_SPACE])
   else
     " NOTE: bang and depth cannot be used together (e.g. 'lockvar! 1').
@@ -340,7 +322,7 @@ function! s:uglify_unlockvar(node) abort dict
   \             s:place_between(self.uglify_nodes(a:node.list), ' '))
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_UNLOCKVAR] = function('s:uglify_unlockvar')
+let s:UGLIFY_FUNC[s:VP.NODE_UNLOCKVAR] = function('s:uglify_unlockvar')
 
 function! s:uglify_if(node) abort dict
   let unode = s:UglifyNode.new(a:node)
@@ -351,14 +333,14 @@ function! s:uglify_if(node) abort dict
     let unode = unode.concat(["\nelsei", s:EX_ARG_SPACE, self.uglify_node(enode.cond)] +
     \                         self.uglify_nodes(enode.body))
   endfor
-  if a:node.else isnot s:vimlparser.NIL
+  if a:node.else isnot s:VP.NIL
     let unode = unode.concat(["\nel"] +
     \                         self.uglify_nodes(a:node.else.body))
   endif
   let unode = unode.add("\nen")
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_IF] = function('s:uglify_if')
+let s:UGLIFY_FUNC[s:VP.NODE_IF] = function('s:uglify_if')
 
 function! s:uglify_while(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -366,19 +348,19 @@ function! s:uglify_while(node) abort dict
                     \.concat(['wh', s:EX_ARG_SPACE, self.uglify_node(a:node.cond)] +
                     \   self.uglify_nodes(a:node.body) + ["\nendw"])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_WHILE] = function('s:uglify_while')
+let s:UGLIFY_FUNC[s:VP.NODE_WHILE] = function('s:uglify_while')
 
 function! s:uglify_for(node) abort dict
   let unode = s:UglifyNode.new(a:node)
                          \.add(s:EX_BEGIN_NEWLINE)
-  if a:node.left isnot s:vimlparser.NIL
+  if a:node.left isnot s:VP.NIL
     let unode = unode.add('for ')
     let unode = unode.add(self.uglify_node(a:node.left))
     let unode = unode.concat([' in', s:EX_ARG_SPACE])
   else
     let unode = unode.add('for[')
     let unode = unode.concat(s:place_between(self.uglify_nodes(a:node.list), ','))
-    if a:node.rest isnot s:vimlparser.NIL
+    if a:node.rest isnot s:VP.NIL
       let unode = unode.concat([';', self.uglify_node(a:node.rest)])
     endif
     let unode = unode.concat([']in', s:EX_ARG_SPACE])
@@ -387,28 +369,28 @@ function! s:uglify_for(node) abort dict
   \                         self.uglify_nodes(a:node.body) + ["\nendfo"])
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_FOR] = function('s:uglify_for')
+let s:UGLIFY_FUNC[s:VP.NODE_FOR] = function('s:uglify_for')
 
 function! s:uglify_continue(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(s:EX_BEGIN_NEWLINE)
                     \.add('con')
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_CONTINUE] = function('s:uglify_continue')
+let s:UGLIFY_FUNC[s:VP.NODE_CONTINUE] = function('s:uglify_continue')
 
 function! s:uglify_break(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(s:EX_BEGIN_NEWLINE)
                     \.add('brea')
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_BREAK] = function('s:uglify_break')
+let s:UGLIFY_FUNC[s:VP.NODE_BREAK] = function('s:uglify_break')
 
 function! s:uglify_try(node) abort dict
   let unode = s:UglifyNode.new(a:node)
                          \.add(s:EX_BEGIN_NEWLINE)
   let unode = unode.concat(["try"] + self.uglify_nodes(a:node.body))
   for cnode in a:node.catch
-    if cnode.pattern isnot s:vimlparser.NIL
+    if cnode.pattern isnot s:VP.NIL
       let unode = unode.add_fmt("\ncat/%s/", cnode.pattern)
       let unode = unode.concat(self.uglify_nodes(cnode.body))
     else
@@ -416,21 +398,21 @@ function! s:uglify_try(node) abort dict
       let unode = unode.concat(self.uglify_nodes(cnode.body))
     endif
   endfor
-  if a:node.finally isnot s:vimlparser.NIL
+  if a:node.finally isnot s:VP.NIL
     let unode = unode.add("\nfina")
     let unode = unode.concat(self.uglify_nodes(a:node.finally.body))
   endif
   let unode = unode.add("\nendt")
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_TRY] = function('s:uglify_try')
+let s:UGLIFY_FUNC[s:VP.NODE_TRY] = function('s:uglify_try')
 
 function! s:uglify_throw(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(s:EX_BEGIN_NEWLINE)
                     \.concat(['th', s:EX_ARG_SPACE, self.uglify_node(a:node.left)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_THROW] = function('s:uglify_throw')
+let s:UGLIFY_FUNC[s:VP.NODE_THROW] = function('s:uglify_throw')
 
 function! s:uglify_echo(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -438,7 +420,7 @@ function! s:uglify_echo(node) abort dict
                     \.concat(['ec', s:EX_ARG_SPACE] +
                     \   s:place_between(self.uglify_nodes(a:node.list), ' '))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ECHO] = function('s:uglify_echo')
+let s:UGLIFY_FUNC[s:VP.NODE_ECHO] = function('s:uglify_echo')
 
 function! s:uglify_echon(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -446,14 +428,14 @@ function! s:uglify_echon(node) abort dict
                     \.concat(['echon', s:EX_ARG_SPACE] +
                     \   s:place_between(self.uglify_nodes(a:node.list), ' '))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ECHON] = function('s:uglify_echon')
+let s:UGLIFY_FUNC[s:VP.NODE_ECHON] = function('s:uglify_echon')
 
 function! s:uglify_echohl(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.add(s:EX_BEGIN_NEWLINE)
                     \.concat(['echoh', s:EX_ARG_SPACE, a:node.str])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ECHOHL] = function('s:uglify_echohl')
+let s:UGLIFY_FUNC[s:VP.NODE_ECHOHL] = function('s:uglify_echohl')
 
 function! s:uglify_echomsg(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -461,7 +443,7 @@ function! s:uglify_echomsg(node) abort dict
                     \.concat(['echom', s:EX_ARG_SPACE] +
                     \   s:place_between(self.uglify_nodes(a:node.list), ' '))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ECHOMSG] = function('s:uglify_echomsg')
+let s:UGLIFY_FUNC[s:VP.NODE_ECHOMSG] = function('s:uglify_echomsg')
 
 function! s:uglify_echoerr(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -469,7 +451,7 @@ function! s:uglify_echoerr(node) abort dict
                     \.concat(['echoe', s:EX_ARG_SPACE] +
                     \   s:place_between(self.uglify_nodes(a:node.list), ' '))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ECHOERR] = function('s:uglify_echoerr')
+let s:UGLIFY_FUNC[s:VP.NODE_ECHOERR] = function('s:uglify_echoerr')
 
 function! s:uglify_execute(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -477,7 +459,7 @@ function! s:uglify_execute(node) abort dict
                     \.concat(['exe', s:EX_ARG_SPACE] +
                     \   s:place_between(self.uglify_nodes(a:node.list), ' '))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_EXECUTE] = function('s:uglify_execute')
+let s:UGLIFY_FUNC[s:VP.NODE_EXECUTE] = function('s:uglify_execute')
 
 function! s:uglify_ternary(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -487,7 +469,7 @@ function! s:uglify_ternary(node) abort dict
                     \   ':',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_TERNARY] = function('s:uglify_ternary')
+let s:UGLIFY_FUNC[s:VP.NODE_TERNARY] = function('s:uglify_ternary')
 
 function! s:uglify_or(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -495,7 +477,7 @@ function! s:uglify_or(node) abort dict
                     \   '||',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_OR] = function('s:uglify_or')
+let s:UGLIFY_FUNC[s:VP.NODE_OR] = function('s:uglify_or')
 
 function! s:uglify_and(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -503,7 +485,7 @@ function! s:uglify_and(node) abort dict
                     \   '&&',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_AND] = function('s:uglify_and')
+let s:UGLIFY_FUNC[s:VP.NODE_AND] = function('s:uglify_and')
 
 function! s:uglify_equal(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -511,7 +493,7 @@ function! s:uglify_equal(node) abort dict
                     \   '==',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_EQUAL] = function('s:uglify_equal')
+let s:UGLIFY_FUNC[s:VP.NODE_EQUAL] = function('s:uglify_equal')
 
 function! s:uglify_equalci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -519,7 +501,7 @@ function! s:uglify_equalci(node) abort dict
                     \   '==?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_EQUALCI] = function('s:uglify_equalci')
+let s:UGLIFY_FUNC[s:VP.NODE_EQUALCI] = function('s:uglify_equalci')
 
 function! s:uglify_equalcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -527,7 +509,7 @@ function! s:uglify_equalcs(node) abort dict
                     \   '==#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_EQUALCS] = function('s:uglify_equalcs')
+let s:UGLIFY_FUNC[s:VP.NODE_EQUALCS] = function('s:uglify_equalcs')
 
 function! s:uglify_nequal(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -535,7 +517,7 @@ function! s:uglify_nequal(node) abort dict
                     \   '!=',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NEQUAL] = function('s:uglify_nequal')
+let s:UGLIFY_FUNC[s:VP.NODE_NEQUAL] = function('s:uglify_nequal')
 
 function! s:uglify_nequalci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -543,7 +525,7 @@ function! s:uglify_nequalci(node) abort dict
                     \   '!=?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NEQUALCI] = function('s:uglify_nequalci')
+let s:UGLIFY_FUNC[s:VP.NODE_NEQUALCI] = function('s:uglify_nequalci')
 
 function! s:uglify_nequalcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -551,7 +533,7 @@ function! s:uglify_nequalcs(node) abort dict
                     \   '!=#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NEQUALCS] = function('s:uglify_nequalcs')
+let s:UGLIFY_FUNC[s:VP.NODE_NEQUALCS] = function('s:uglify_nequalcs')
 
 function! s:uglify_greater(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -559,7 +541,7 @@ function! s:uglify_greater(node) abort dict
                     \   '>',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_GREATER] = function('s:uglify_greater')
+let s:UGLIFY_FUNC[s:VP.NODE_GREATER] = function('s:uglify_greater')
 
 function! s:uglify_greaterci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -567,7 +549,7 @@ function! s:uglify_greaterci(node) abort dict
                     \   '>?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_GREATERCI] = function('s:uglify_greaterci')
+let s:UGLIFY_FUNC[s:VP.NODE_GREATERCI] = function('s:uglify_greaterci')
 
 function! s:uglify_greatercs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -575,7 +557,7 @@ function! s:uglify_greatercs(node) abort dict
                     \   '>#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_GREATERCS] = function('s:uglify_greatercs')
+let s:UGLIFY_FUNC[s:VP.NODE_GREATERCS] = function('s:uglify_greatercs')
 
 function! s:uglify_gequal(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -583,7 +565,7 @@ function! s:uglify_gequal(node) abort dict
                     \   '>=',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_GEQUAL] = function('s:uglify_gequal')
+let s:UGLIFY_FUNC[s:VP.NODE_GEQUAL] = function('s:uglify_gequal')
 
 function! s:uglify_gequalci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -591,7 +573,7 @@ function! s:uglify_gequalci(node) abort dict
                     \   '>=?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_GEQUALCI] = function('s:uglify_gequalci')
+let s:UGLIFY_FUNC[s:VP.NODE_GEQUALCI] = function('s:uglify_gequalci')
 
 function! s:uglify_gequalcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -599,7 +581,7 @@ function! s:uglify_gequalcs(node) abort dict
                     \   '>=#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_GEQUALCS] = function('s:uglify_gequalcs')
+let s:UGLIFY_FUNC[s:VP.NODE_GEQUALCS] = function('s:uglify_gequalcs')
 
 function! s:uglify_smaller(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -607,7 +589,7 @@ function! s:uglify_smaller(node) abort dict
                     \   '<',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SMALLER] = function('s:uglify_smaller')
+let s:UGLIFY_FUNC[s:VP.NODE_SMALLER] = function('s:uglify_smaller')
 
 function! s:uglify_smallerci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -615,7 +597,7 @@ function! s:uglify_smallerci(node) abort dict
                     \   '<?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SMALLERCI] = function('s:uglify_smallerci')
+let s:UGLIFY_FUNC[s:VP.NODE_SMALLERCI] = function('s:uglify_smallerci')
 
 function! s:uglify_smallercs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -623,7 +605,7 @@ function! s:uglify_smallercs(node) abort dict
                     \   '<#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SMALLERCS] = function('s:uglify_smallercs')
+let s:UGLIFY_FUNC[s:VP.NODE_SMALLERCS] = function('s:uglify_smallercs')
 
 function! s:uglify_sequal(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -631,7 +613,7 @@ function! s:uglify_sequal(node) abort dict
                     \   '<=',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SEQUAL] = function('s:uglify_sequal')
+let s:UGLIFY_FUNC[s:VP.NODE_SEQUAL] = function('s:uglify_sequal')
 
 function! s:uglify_sequalci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -639,7 +621,7 @@ function! s:uglify_sequalci(node) abort dict
                     \   '<=?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SEQUALCI] = function('s:uglify_sequalci')
+let s:UGLIFY_FUNC[s:VP.NODE_SEQUALCI] = function('s:uglify_sequalci')
 
 function! s:uglify_sequalcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -647,7 +629,7 @@ function! s:uglify_sequalcs(node) abort dict
                     \   '<=#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SEQUALCS] = function('s:uglify_sequalcs')
+let s:UGLIFY_FUNC[s:VP.NODE_SEQUALCS] = function('s:uglify_sequalcs')
 
 function! s:uglify_match(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -655,7 +637,7 @@ function! s:uglify_match(node) abort dict
                     \   '=~',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_MATCH] = function('s:uglify_match')
+let s:UGLIFY_FUNC[s:VP.NODE_MATCH] = function('s:uglify_match')
 
 function! s:uglify_matchci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -663,7 +645,7 @@ function! s:uglify_matchci(node) abort dict
                     \   '=~?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_MATCHCI] = function('s:uglify_matchci')
+let s:UGLIFY_FUNC[s:VP.NODE_MATCHCI] = function('s:uglify_matchci')
 
 function! s:uglify_matchcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -671,7 +653,7 @@ function! s:uglify_matchcs(node) abort dict
                     \   '=~#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_MATCHCS] = function('s:uglify_matchcs')
+let s:UGLIFY_FUNC[s:VP.NODE_MATCHCS] = function('s:uglify_matchcs')
 
 function! s:uglify_nomatch(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -679,7 +661,7 @@ function! s:uglify_nomatch(node) abort dict
                     \   '!~',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NOMATCH] = function('s:uglify_nomatch')
+let s:UGLIFY_FUNC[s:VP.NODE_NOMATCH] = function('s:uglify_nomatch')
 
 function! s:uglify_nomatchci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -687,7 +669,7 @@ function! s:uglify_nomatchci(node) abort dict
                     \   '!~?',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NOMATCHCI] = function('s:uglify_nomatchci')
+let s:UGLIFY_FUNC[s:VP.NODE_NOMATCHCI] = function('s:uglify_nomatchci')
 
 function! s:uglify_nomatchcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -695,7 +677,7 @@ function! s:uglify_nomatchcs(node) abort dict
                     \   '!~#',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NOMATCHCS] = function('s:uglify_nomatchcs')
+let s:UGLIFY_FUNC[s:VP.NODE_NOMATCHCS] = function('s:uglify_nomatchcs')
 
 function! s:uglify_is(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -705,7 +687,7 @@ function! s:uglify_is(node) abort dict
                     \.add(s:WORD_BOUNDARY_SPACE)
                     \.add(self.uglify_node(a:node.right))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_IS] = function('s:uglify_is')
+let s:UGLIFY_FUNC[s:VP.NODE_IS] = function('s:uglify_is')
 
 function! s:uglify_isci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -714,7 +696,7 @@ function! s:uglify_isci(node) abort dict
                     \.add('is?')
                     \.add(self.uglify_node(a:node.right))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ISCI] = function('s:uglify_isci')
+let s:UGLIFY_FUNC[s:VP.NODE_ISCI] = function('s:uglify_isci')
 
 function! s:uglify_iscs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -723,7 +705,7 @@ function! s:uglify_iscs(node) abort dict
                     \.add('is#')
                     \.add(self.uglify_node(a:node.right))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ISCS] = function('s:uglify_iscs')
+let s:UGLIFY_FUNC[s:VP.NODE_ISCS] = function('s:uglify_iscs')
 
 function! s:uglify_isnot(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -733,7 +715,7 @@ function! s:uglify_isnot(node) abort dict
                     \.add(s:WORD_BOUNDARY_SPACE)
                     \.add(self.uglify_node(a:node.right))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ISNOT] = function('s:uglify_isnot')
+let s:UGLIFY_FUNC[s:VP.NODE_ISNOT] = function('s:uglify_isnot')
 
 function! s:uglify_isnotci(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -742,7 +724,7 @@ function! s:uglify_isnotci(node) abort dict
                     \.add('isnot?')
                     \.add(self.uglify_node(a:node.right))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ISNOTCI] = function('s:uglify_isnotci')
+let s:UGLIFY_FUNC[s:VP.NODE_ISNOTCI] = function('s:uglify_isnotci')
 
 function! s:uglify_isnotcs(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -751,7 +733,7 @@ function! s:uglify_isnotcs(node) abort dict
                     \.add('isnot#')
                     \.add(self.uglify_node(a:node.right))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ISNOTCS] = function('s:uglify_isnotcs')
+let s:UGLIFY_FUNC[s:VP.NODE_ISNOTCS] = function('s:uglify_isnotcs')
 
 function! s:uglify_add(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -759,7 +741,7 @@ function! s:uglify_add(node) abort dict
                     \   '+',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ADD] = function('s:uglify_add')
+let s:UGLIFY_FUNC[s:VP.NODE_ADD] = function('s:uglify_add')
 
 function! s:uglify_subtract(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -767,14 +749,14 @@ function! s:uglify_subtract(node) abort dict
                     \   '-',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SUBTRACT] = function('s:uglify_subtract')
+let s:UGLIFY_FUNC[s:VP.NODE_SUBTRACT] = function('s:uglify_subtract')
 
 " XXX: NODE_DOT(property access or string concatenation) and
 " NODE_CONCAT(string concatenation) are different. is it safe to mix?
 function! s:uglify_concat(node) abort dict
   return call('s:uglify_dot', [a:node], self)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_CONCAT] = function('s:uglify_concat')
+let s:UGLIFY_FUNC[s:VP.NODE_CONCAT] = function('s:uglify_concat')
 
 function! s:uglify_multiply(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -782,7 +764,7 @@ function! s:uglify_multiply(node) abort dict
                     \   '*',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_MULTIPLY] = function('s:uglify_multiply')
+let s:UGLIFY_FUNC[s:VP.NODE_MULTIPLY] = function('s:uglify_multiply')
 
 function! s:uglify_divide(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -790,7 +772,7 @@ function! s:uglify_divide(node) abort dict
                     \   '/',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_DIVIDE] = function('s:uglify_divide')
+let s:UGLIFY_FUNC[s:VP.NODE_DIVIDE] = function('s:uglify_divide')
 
 function! s:uglify_remainder(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -798,25 +780,25 @@ function! s:uglify_remainder(node) abort dict
                     \   '%',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_REMAINDER] = function('s:uglify_remainder')
+let s:UGLIFY_FUNC[s:VP.NODE_REMAINDER] = function('s:uglify_remainder')
 
 function! s:uglify_not(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.concat(['!', self.uglify_node(a:node.left)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NOT] = function('s:uglify_not')
+let s:UGLIFY_FUNC[s:VP.NODE_NOT] = function('s:uglify_not')
 
 function! s:uglify_minus(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.concat(['-', self.uglify_node(a:node.left)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_MINUS] = function('s:uglify_minus')
+let s:UGLIFY_FUNC[s:VP.NODE_MINUS] = function('s:uglify_minus')
 
 function! s:uglify_plus(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.concat(['+', self.uglify_node(a:node.left)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_PLUS] = function('s:uglify_plus')
+let s:UGLIFY_FUNC[s:VP.NODE_PLUS] = function('s:uglify_plus')
 
 function! s:uglify_subscript(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -825,23 +807,23 @@ function! s:uglify_subscript(node) abort dict
                     \   self.uglify_node(a:node.right),
                     \   ']'])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SUBSCRIPT] = function('s:uglify_subscript')
+let s:UGLIFY_FUNC[s:VP.NODE_SUBSCRIPT] = function('s:uglify_subscript')
 
 function! s:uglify_slice(node) abort dict
   let unode = s:UglifyNode.new(a:node)
   let unode = unode.add(self.uglify_node(a:node.left))
   let unode = unode.add('[')
-  if a:node.rlist[0] isnot s:vimlparser.NIL
+  if a:node.rlist[0] isnot s:VP.NIL
     let unode = unode.add(self.uglify_node(a:node.rlist[0]))
   endif
   let unode = unode.add(':')
-  if a:node.rlist[1] isnot s:vimlparser.NIL
+  if a:node.rlist[1] isnot s:VP.NIL
     let unode = unode.add(self.uglify_node(a:node.rlist[1]))
   endif
   let unode = unode.add(']')
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_SLICE] = function('s:uglify_slice')
+let s:UGLIFY_FUNC[s:VP.NODE_SLICE] = function('s:uglify_slice')
 
 function! s:uglify_call(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -851,7 +833,7 @@ function! s:uglify_call(node) abort dict
                     \   s:place_between(self.uglify_nodes(a:node.rlist), ','))
                     \.add(')')
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_CALL] = function('s:uglify_call')
+let s:UGLIFY_FUNC[s:VP.NODE_CALL] = function('s:uglify_call')
 
 function! s:uglify_dot(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -859,17 +841,17 @@ function! s:uglify_dot(node) abort dict
                     \   '.',
                     \   self.uglify_node(a:node.right)])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_DOT] = function('s:uglify_dot')
+let s:UGLIFY_FUNC[s:VP.NODE_DOT] = function('s:uglify_dot')
 
 function! s:uglify_number(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_NUMBER] = function('s:uglify_number')
+let s:UGLIFY_FUNC[s:VP.NODE_NUMBER] = function('s:uglify_number')
 
 function! s:uglify_string(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_STRING] = function('s:uglify_string')
+let s:UGLIFY_FUNC[s:VP.NODE_STRING] = function('s:uglify_string')
 
 function! s:uglify_list(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -877,7 +859,7 @@ function! s:uglify_list(node) abort dict
                     \.concat(s:place_between(self.uglify_nodes(a:node.value), ','))
                     \.add(']')
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_LIST] = function('s:uglify_list')
+let s:UGLIFY_FUNC[s:VP.NODE_LIST] = function('s:uglify_list')
 
 function! s:uglify_dict(node) abort dict
   let unode = s:UglifyNode.new(a:node)
@@ -891,43 +873,43 @@ function! s:uglify_dict(node) abort dict
   let unode = unode.add('}')
   return unode
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_DICT] = function('s:uglify_dict')
+let s:UGLIFY_FUNC[s:VP.NODE_DICT] = function('s:uglify_dict')
 
 function! s:uglify_option(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_OPTION] = function('s:uglify_option')
+let s:UGLIFY_FUNC[s:VP.NODE_OPTION] = function('s:uglify_option')
 
 function! s:uglify_identifier(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_IDENTIFIER] = function('s:uglify_identifier')
+let s:UGLIFY_FUNC[s:VP.NODE_IDENTIFIER] = function('s:uglify_identifier')
 
 function! s:uglify_curlyname(node) abort dict
   return s:UglifyNode.new(a:node).concat(self.uglify_nodes(a:node.value))
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_CURLYNAME] = function('s:uglify_curlyname')
+let s:UGLIFY_FUNC[s:VP.NODE_CURLYNAME] = function('s:uglify_curlyname')
 
 function! s:uglify_env(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_ENV] = function('s:uglify_env')
+let s:UGLIFY_FUNC[s:VP.NODE_ENV] = function('s:uglify_env')
 
 function! s:uglify_reg(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_REG] = function('s:uglify_reg')
+let s:UGLIFY_FUNC[s:VP.NODE_REG] = function('s:uglify_reg')
 
 function! s:uglify_curlynamepart(node) abort dict
   return s:UglifyNode.new(a:node).add(a:node.value)
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_CURLYNAMEPART] = function('s:uglify_curlynamepart')
+let s:UGLIFY_FUNC[s:VP.NODE_CURLYNAMEPART] = function('s:uglify_curlynamepart')
 
 function! s:uglify_curlynameexpr(node) abort dict
   return s:UglifyNode.new(a:node)
                     \.concat(['{', self.uglify_node(a:node.value), '}'])
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_CURLYNAMEEXPR] = function('s:uglify_curlynameexpr')
+let s:UGLIFY_FUNC[s:VP.NODE_CURLYNAMEEXPR] = function('s:uglify_curlynameexpr')
 
 function! s:uglify_lambda(node) abort dict
   return s:UglifyNode.new(a:node)
@@ -937,7 +919,4 @@ function! s:uglify_lambda(node) abort dict
                     \.add(self.uglify_node(a:node.left))
                     \.add('}')
 endfunction
-let s:UGLIFY_FUNC[s:vimlparser.NODE_LAMBDA] = function('s:uglify_lambda')
-
-
-call s:run()
+let s:UGLIFY_FUNC[s:VP.NODE_LAMBDA] = function('s:uglify_lambda')
