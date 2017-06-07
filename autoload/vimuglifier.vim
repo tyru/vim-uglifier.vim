@@ -48,10 +48,10 @@ function! s:Uglifier.new() abort
 endfunction
 
 " @param node Node
-" @return String
+" @return List[String]
 function! s:Uglifier.uglify(node) abort
   let unode = self.uglify_node(a:node)
-  return self.compile(unode)
+  return split(self.compile(unode), '\n', 1)
 endfunction
 
 " @param node Node
